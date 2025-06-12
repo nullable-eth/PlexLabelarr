@@ -23,7 +23,6 @@ Automatically sync TMDb movie keywords as Plex labels - A lightweight Go applica
 
 ![Screenshot 2025-06-12 101413](https://github.com/user-attachments/assets/2b35580f-6443-4a6d-9e40-f8217e660699)
 
-
 ## 📋 Environment Variables
 
 | Variable | Description | Default | Required |
@@ -85,7 +84,7 @@ services:
       - PLEX_PORT=32400
       - PLEX_REQUIRES_HTTPS=true
       - PLEX_TOKEN=your_plex_token_here
-      - TMDB_API_KEY=your_tmdb_api_key_here
+      - TMDB_API_KEY=your_tmdb_api_key
       - PROCESS_TIMER=5m
     networks:
       - plexlabelarr
@@ -152,17 +151,39 @@ CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o plexlabelarr main.go
 
 ## 🔍 TMDb ID Detection
 
-The application can find TMDb IDs from multiple sources:
+The application can find TMDb IDs from multiple sources and supports flexible formats:
 
 - **Plex Metadata**: Standard TMDb agent IDs
 - **File Paths**: `{tmdb-12345}` in filenames or directory names
-- **Various Formats**: Supports different TMDb ID formats
+- **Flexible Formats**: The TMDb ID can be detected in a variety of patterns, not just `{tmdb-12345}`. Supported patterns include:
+  - `{tmdb-12345}` (curly braces, anywhere in the folder or file name)
+  - `[tmdb-12345]` (square brackets)
+  - `(tmdb-12345)` (parentheses)
+  - `tmdb-12345` (standalone, with or without delimiters)
+  - Case-insensitive: `TMDB-12345`, `Tmdb-12345`, etc.
+  - The TMDb ID can appear in either the directory or file name, and can be surrounded by spaces or other characters.
+  - **Delimiters**: The TMDb ID pattern supports all common delimiters (such as `:`, `;`, `-`, `_`, etc.) between `tmdb` and the ID. For example:
+    - `tmdb:15448`
+    - `tmdb;15448`
+    - `tmdb-15448`
+    - `tmdb_15448`
+    - `tmdb: 15448`, `tmdb- 15448`, etc.
+    - These can appear in any of the supported bracket/brace/parenthesis formats or standalone.
+    - The pattern will **not** match `tmdb15448` (no separator).
 
 Example file paths:
 
 ```
 /data/Movies/Zeitgeist - Moving Forward (2011) {tmdb-54293}/movie.mp4
-/movies/The Matrix (1999) {tmdb-603}/The Matrix.mkv
+/movies/The Matrix (1999) [tmdb-603]/The Matrix.mkv
+/movies/Inception (2010) (tmdb:27205)/Inception.mkv
+/movies/Avatar (2009) tmdb;19995/Avatar.mkv
+/movies/Interstellar (2014) TMDB_157336/Interstellar.mkv
+/movies/Edge Case - {tmdb-12345}/file.mkv
+/movies/Colon: [tmdb:54321]/file.mkv
+/movies/Semicolon; (tmdb;67890)/file.mkv
+/movies/Underscore_tmdb_11111/file.mkv
+/movies/ExtraSuffix tmdb-22222_extra/file.mkv
 ```
 
 ## 📊 Monitoring
@@ -216,8 +237,7 @@ docker logs -f plexlabelarr
 
 **401 Unauthorized from TMDb**
 
-- Ensure you're using the Bearer token, not API key
-- Verify the token has proper permissions
+- Ensure you're using a valid API token.
 
 **No TMDb ID found**
 
