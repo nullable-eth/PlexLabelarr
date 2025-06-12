@@ -234,7 +234,7 @@ func processAllMovies(config Config) {
 
 	totalMovieCount = len(movies)
 	fmt.Printf("✅ Found %d movies in library\n", totalMovieCount)
-	fmt.Printf("📊 Previously processed movies: %d\n", len(processedMovies))
+
 
 	newMovies := 0
 	updatedMovies := 0
@@ -248,31 +248,57 @@ func processAllMovies(config Config) {
 			continue
 		}
 
-		fmt.Printf("\n🎬 Processing movie %d/%d: %s (%d)\n", i+1, len(movies), movie.Title, movie.Year)
-
-		// Extract TMDb ID from movie
+		// Extract TMDb ID from movie first (before any output)
 		tmdbID := extractTMDbID(movie)
 		if tmdbID == "" {
 			fmt.Printf("⚠️ No TMDb ID found for movie: %s\n", movie.Title)
 			continue
 		}
 
-		fmt.Printf("🔑 TMDb ID: %s\n", tmdbID)
-
 		// Get TMDb keywords
 		keywords, err := getTMDbKeywords(config, tmdbID)
 		if err != nil {
-			fmt.Printf("❌ Error fetching TMDb keywords: %v\n", err)
+			fmt.Printf("❌ Error fetching TMDb keywords for %s: %v\n", movie.Title, err)
 			continue
 		}
 
-		fmt.Printf("🏷️ Found %d TMDb keywords\n", len(keywords))
+		// Fetch detailed movie information to get current labels
+		movieDetails, err := getMovieDetails(config, movie.RatingKey)
+		if err != nil {
+			fmt.Printf("❌ Error fetching movie details for %s: %v\n", movie.Title, err)
+			continue
+		}
 
-		// Get current movie labels
-		currentLabels := make([]string, len(movie.Label))
-		for j, label := range movie.Label {
+		// Get current movie labels from detailed fetch
+		currentLabels := make([]string, len(movieDetails.Label))
+		for j, label := range movieDetails.Label {
 			currentLabels[j] = label.Tag
 		}
+
+		// Check if all keywords already exist as labels (case-insensitive)
+		currentLabelsMap := make(map[string]bool)
+		for _, label := range currentLabels {
+			currentLabelsMap[strings.ToLower(label)] = true
+		}
+
+		allKeywordsExist := true
+		for _, keyword := range keywords {
+			if !currentLabelsMap[strings.ToLower(keyword)] {
+				allKeywordsExist = false
+				break
+			}
+		}
+
+		// If all keywords already exist, skip silently
+		if allKeywordsExist {
+			skippedMovies++
+			continue
+		}
+
+		// Only show processing output for movies that need updates
+		fmt.Printf("\n🎬 Processing movie %d/%d: %s (%d)\n", i+1, len(movies), movie.Title, movie.Year)
+		fmt.Printf("🔑 TMDb ID: %s\n", tmdbID)
+		fmt.Printf("🏷️ Found %d TMDb keywords\n", len(keywords))
 
 		// Sync labels with keywords
 		err = syncMovieLabelsWithKeywords(config, movie.RatingKey, currentLabels, keywords)
@@ -339,7 +365,6 @@ func extractTMDbID(movie Movie) string {
 		for _, part := range media.Part {
 			if part.File != "" {
 				if matches := filePathRegex.FindStringSubmatch(part.File); len(matches) > 1 {
-					fmt.Printf("  🔍 Found TMDb ID in file path: %s\n", part.File)
 					return matches[1]
 				}
 			}
@@ -354,7 +379,6 @@ func extractTMDbID(movie Movie) string {
 				// Extract directory path from file path
 				dirPath := strings.ReplaceAll(part.File, "\\", "/")
 				if matches := dirPathRegex.FindStringSubmatch(dirPath); len(matches) > 1 {
-					fmt.Printf("  🔍 Found TMDb ID in directory path: %s\n", dirPath)
 					return matches[1]
 				}
 			}
@@ -379,8 +403,6 @@ func getTMDbKeywords(config Config, tmdbID string) ([]string, error) {
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialTimeout:     10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
@@ -414,27 +436,22 @@ func getTMDbKeywords(config Config, tmdbID string) ([]string, error) {
 }
 
 func syncMovieLabelsWithKeywords(config Config, movieID string, currentLabels []string, keywords []string) error {
-	// Convert current labels to a map for easy lookup
+	// Convert current labels to a map for easy lookup (case-insensitive)
 	currentLabelsMap := make(map[string]bool)
 	for _, label := range currentLabels {
-		currentLabelsMap[label] = true
+		currentLabelsMap[strings.ToLower(label)] = true
 	}
 
-	// Find keywords to add (keywords not in current labels)
+	// Find keywords to add (keywords not in current labels, case-insensitive comparison)
 	labelsToAdd := make([]string, 0)
 	for _, keyword := range keywords {
-		if !currentLabelsMap[keyword] {
+		if !currentLabelsMap[strings.ToLower(keyword)] {
 			labelsToAdd = append(labelsToAdd, keyword)
 		}
 	}
 
 	fmt.Printf("  📝 Labels to add: %v\n", labelsToAdd)
-	fmt.Printf("  🏷️ Keeping existing labels: %v\n", currentLabels)
-
-	if len(labelsToAdd) == 0 {
-		fmt.Println("  ✅ All keywords already exist as labels")
-		return nil
-	}
+	fmt.Printf("  🏷️ Existing labels: %v\n", currentLabels)
 
 	// Merge existing labels with new keywords
 	allLabels := make([]string, 0, len(currentLabels)+len(labelsToAdd))
@@ -472,8 +489,6 @@ func updateMovieLabelsWithKeywords(config Config, movieID string, keywords []str
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialTimeout:     10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
@@ -507,8 +522,6 @@ func getAllLibraries(config Config) ([]Library, error) {
 		Timeout: 30 * time.Second, // Add 30 second timeout
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialTimeout:     10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 	
@@ -537,6 +550,54 @@ func getAllLibraries(config Config) ([]Library, error) {
 	return libraryResponse.MediaContainer.Directory, nil
 }
 
+func getMovieDetails(config Config, ratingKey string) (*Movie, error) {
+	// Use the individual metadata endpoint which includes labels by default
+	movieURL := buildPlexURL(config, fmt.Sprintf("/library/metadata/%s?X-Plex-Token=%s", ratingKey, config.PlexToken))
+
+	req, err := http.NewRequest("GET", movieURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("making request to %s: %w", movieURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP %d: %s - Response: %s", resp.StatusCode, resp.Status, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+
+
+	var plexResponse PlexResponse
+	if err := json.Unmarshal(body, &plexResponse); err != nil {
+		return nil, fmt.Errorf("parsing JSON response: %w", err)
+	}
+
+	if len(plexResponse.MediaContainer.Metadata) == 0 {
+		return nil, fmt.Errorf("no movie found with ratingKey %s", ratingKey)
+	}
+
+	return &plexResponse.MediaContainer.Metadata[0], nil
+}
+
 func getMoviesFromLibrary(config Config) ([]Movie, error) {
 	moviesURL := buildPlexURL(config, fmt.Sprintf("/library/sections/%s/all?X-Plex-Token=%s", config.LibraryID, config.PlexToken))
 
@@ -551,8 +612,6 @@ func getMoviesFromLibrary(config Config) ([]Movie, error) {
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			DialTimeout:     10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 	resp, err := client.Do(req)
