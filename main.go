@@ -235,7 +235,6 @@ func processAllMovies(config Config) {
 	totalMovieCount = len(movies)
 	fmt.Printf("✅ Found %d movies in library\n", totalMovieCount)
 
-
 	newMovies := 0
 	updatedMovies := 0
 	skippedMovies := 0
@@ -358,28 +357,33 @@ func extractTMDbID(movie Movie) string {
 	}
 
 	// If still not found, try to extract from file paths
-	// Look for patterns like {tmdb-12345} in file paths
-	filePathRegex := regexp.MustCompile(`\{tmdb-(\d+)\}`)
+	// Look for patterns like {tmdb-12345} or [tmdb:12345] or (tmdb;12345) etc.
+	// This regex will match:
+	// 1. Any opening brace/bracket/parenthesis
+	// 2. Optional whitespace
+	// 3. "tmdb" (case insensitive)
+	// 4. Any non-digit characters (separators)
+	// 5. One or more digits (the ID)
+	// 6. Any closing brace/bracket/parenthesis
+	filePathRegex := regexp.MustCompile(`[\[\{\(\<]?\s*tmdb\D+?(\d+)[\]\}\)\>]?`)
 
 	for _, media := range movie.Media {
 		for _, part := range media.Part {
 			if part.File != "" {
-				if matches := filePathRegex.FindStringSubmatch(part.File); len(matches) > 1 {
+				// Convert backslashes to forward slashes for consistency
+				normalizedPath := strings.ReplaceAll(part.File, "\\", "/")
+
+				// Check both the full path and individual path components
+				if matches := filePathRegex.FindStringSubmatch(normalizedPath); len(matches) > 1 {
 					return matches[1]
 				}
-			}
-		}
-	}
 
-	// Also try directory name patterns like "Movie Name (Year) {tmdb-12345}"
-	dirPathRegex := regexp.MustCompile(`\{tmdb-(\d+)\}`)
-	for _, media := range movie.Media {
-		for _, part := range media.Part {
-			if part.File != "" {
-				// Extract directory path from file path
-				dirPath := strings.ReplaceAll(part.File, "\\", "/")
-				if matches := dirPathRegex.FindStringSubmatch(dirPath); len(matches) > 1 {
-					return matches[1]
+				// Split path and check each component
+				pathComponents := strings.Split(normalizedPath, "/")
+				for _, component := range pathComponents {
+					if matches := filePathRegex.FindStringSubmatch(component); len(matches) > 1 {
+						return matches[1]
+					}
 				}
 			}
 		}
@@ -508,7 +512,7 @@ func updateMovieLabelsWithKeywords(config Config, movieID string, keywords []str
 
 func getAllLibraries(config Config) ([]Library, error) {
 	librariesURL := buildPlexURL(config, fmt.Sprintf("/library/sections/?X-Plex-Token=%s", config.PlexToken))
-	
+
 	fmt.Printf("🔗 Attempting to connect to: %s\n", librariesURL)
 
 	req, err := http.NewRequest("GET", librariesURL, nil)
@@ -524,7 +528,7 @@ func getAllLibraries(config Config) ([]Library, error) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 	}
-	
+
 	fmt.Println("📡 Making request to Plex server...")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -583,8 +587,6 @@ func getMovieDetails(config Config, ratingKey string) (*Movie, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
 	}
-
-
 
 	var plexResponse PlexResponse
 	if err := json.Unmarshal(body, &plexResponse); err != nil {
