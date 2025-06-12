@@ -15,6 +15,14 @@ Automatically sync TMDb movie keywords as Plex labels - A lightweight Go applica
 - 🐳 **Docker Ready**: Containerized for easy deployment
 - ⚙️ **Environment Configuration**: Fully configurable via environment variables
 - 🔒 **Protocol Flexibility**: Supports both HTTP and HTTPS Plex connections
+- Allows you to have TMBDB keywords as labels in Plex:
+![Screenshot 2025-06-12 100834](https://github.com/user-attachments/assets/04a01fee-0351-47c3-862c-0e71cfca2456)
+- Create custom dynamic filters for multiple labels that will update automatically when new movies are labeled:
+![Screenshot 2025-06-12 101530](https://github.com/user-attachments/assets/54a1686e-2a29-4958-9e6e-1a592a837130)
+- Filter on the fly by a label:
+
+![Screenshot 2025-06-12 101413](https://github.com/user-attachments/assets/2b35580f-6443-4a6d-9e40-f8217e660699)
+
 
 ## 📋 Environment Variables
 
