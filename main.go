@@ -377,8 +377,11 @@ func getTMDbKeywords(config Config, tmdbID string) ([]string, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.TMDbAPIKey))
 
 	client := &http.Client{
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			DialTimeout:     10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
@@ -467,8 +470,11 @@ func updateMovieLabelsWithKeywords(config Config, movieID string, keywords []str
 	}
 
 	client := &http.Client{
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			DialTimeout:     10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
@@ -488,6 +494,8 @@ func updateMovieLabelsWithKeywords(config Config, movieID string, keywords []str
 
 func getAllLibraries(config Config) ([]Library, error) {
 	librariesURL := buildPlexURL(config, fmt.Sprintf("/library/sections/?X-Plex-Token=%s", config.PlexToken))
+	
+	fmt.Printf("🔗 Attempting to connect to: %s\n", librariesURL)
 
 	req, err := http.NewRequest("GET", librariesURL, nil)
 	if err != nil {
@@ -497,10 +505,15 @@ func getAllLibraries(config Config) ([]Library, error) {
 	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{
+		Timeout: 30 * time.Second, // Add 30 second timeout
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			DialTimeout:     10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
+	
+	fmt.Println("📡 Making request to Plex server...")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("making request to %s: %w", librariesURL, err)
@@ -536,8 +549,11 @@ func getMoviesFromLibrary(config Config) ([]Movie, error) {
 	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			DialTimeout:     10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 	resp, err := client.Do(req)
