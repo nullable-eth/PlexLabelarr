@@ -241,15 +241,14 @@ func processAllMovies(config Config) {
 	skippedMovies := 0
 
 	for i, movie := range movies {
-		fmt.Printf("\n🎬 Processing movie %d/%d: %s (%d)\n", i+1, len(movies), movie.Title, movie.Year)
-
 		// Check if movie was already processed
 		processed, exists := processedMovies[movie.RatingKey]
 		if exists && processed.KeywordsSynced {
-			fmt.Printf("⏭️ Skipping already processed movie: %s\n", movie.Title)
 			skippedMovies++
 			continue
 		}
+
+		fmt.Printf("\n🎬 Processing movie %d/%d: %s (%d)\n", i+1, len(movies), movie.Title, movie.Year)
 
 		// Extract TMDb ID from movie
 		tmdbID := extractTMDbID(movie)
